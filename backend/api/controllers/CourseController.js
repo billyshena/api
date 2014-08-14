@@ -152,27 +152,29 @@ module.exports = {
                 if(!user){
                     return ErrorService.sendError(500, 'User object not found', req, res);
                 }
-                async.map(
+                var results = [];
+                async.each(
                     user.courses,
                     function findCourse(course,callback){
                         Course
                             .findOne({ id: course.id })
                             .populate('owner')
                             .populate('subject')
-                            .exec(function(err,result){
+                            .exec(function(err,course){
                                 if(err){
-                                    callback(err,null);
+                                    callback(err);
                                 }
-                                else if(!result){
-                                    callback(null,null);
+                                else if(!course){
+                                    callback(err);
                                 }
-                                else {
-                                    callback(null, result);
+                                else{
+                                    results.push(course);
+                                    callback();
                                 }
                             });
                     },
                     /** When everything has been done **/
-                        function(err,results){
+                        function(err){
                         if(err){
                             return ErrorService.sendError(500,err, req, res);
                         }
@@ -255,7 +257,6 @@ module.exports = {
         }
     },
 
-
     /** Remove the Course + its contents, exercises and corrections **/
     destroy: function(req,res){
         if(req.param("course") && req.token.id){
@@ -310,7 +311,7 @@ module.exports = {
                      *
                      * @param   {null|string}   error   Possible error
                      **/
-                    function (error, data) {
+                        function (error, data) {
                         if (error) {
                             return ErrorService.sendError(500, err, req, res);
                             // An error occurred
@@ -321,6 +322,9 @@ module.exports = {
                     }
                 );
             });
+        }
+        else{
+            return ErrorService.sendError(412,'Missing parameters', req, res);
         }
     },
 
@@ -333,8 +337,7 @@ module.exports = {
                         Content.count({
                             course: courseId
                         }).exec(function(err,contents){
-                            console.log(contents);
-                           callback(err,contents);
+                            callback(err,contents);
                         });
                     },
 
@@ -342,8 +345,7 @@ module.exports = {
                         Exercise.count({
                             course: courseId
                         }).exec(function(err,exercises){
-                            console.log(exercises);
-                           callback(err,exercises);
+                            callback(err,exercises);
                         });
                     },
 
@@ -351,8 +353,7 @@ module.exports = {
                         Correction.count({
                             course: courseId
                         }).exec(function(err,corrections){
-                            console.log(corrections);
-                           callback(err,corrections);
+                            callback(err,corrections);
                         });
                     }
                 },
@@ -361,10 +362,12 @@ module.exports = {
                     if(err){
                         return ErrorService.sendError(500,err,req,res);
                     }
-                    console.log(data);
                     return res.json(data);
                 }
             )
+        }
+        else{
+            return ErrorService.sendError(412,'Missing parameters', req, res);
         }
     }
 };

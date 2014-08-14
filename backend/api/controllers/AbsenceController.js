@@ -13,7 +13,7 @@ module.exports = {
 
     /** Retrieve all user's absences (student) **/
     userAbsences: function (req, res) {
-        if (req.token && req.token.id > 0 && req.param("state")) {
+        if (req.token && req.token.id > 0 && req.param("state")){
             var state = sanitizer.escape(req.param("state"));
             User
                 .findOne({ id: req.token.id })
@@ -26,7 +26,8 @@ module.exports = {
                         return ErrorService.sendError(400, "Utilisateur non trouvé", req, res);
                     }
                     /** We loop on each User's absence **/
-                    async.map(
+                    var results = [];
+                    async.each(
                         user.absences,
                         function getAbsence(absence, callback) {
                             Absence.findOne({
@@ -34,10 +35,10 @@ module.exports = {
                                 owner: req.token.id
                             }).exec(function (err, abs) {
                                 if (err) {
-                                    callback(err,null);
+                                    callback(err);
                                 }
-                                else if(!abs){
-                                    callback(null,null);
+                                if(!abs){
+                                    callback(err);
                                 }
                                 else {
                                     /** Fetch according Event to the Absence object found **/
@@ -46,31 +47,32 @@ module.exports = {
                                         .populate('teacher')
                                         .exec(function (err, event) {
                                             if (err) {
-                                                callback(err, null);
+                                                callback(err);
                                             }
                                             else if (!event) {
-                                                callback(null, null);
+                                                callback(err);
                                             }
                                             else {
                                                 abs.event = event;
-                                                callback(null, abs);
+                                                results.push(abs);
+                                                callback();
                                             }
                                         });
                                 }
                             });
                         },
                         /** When everything has been done **/
-                        function (err, results) {
+                            function (err) {
                             if (err) {
                                 return ErrorService.sendError(500, err, req, res);
                             }
-                            res.json(results);
+                            return res.json(results);
                         }
                     );
-            });
+                });
         }
         else{
-            return ErrorService.sendError(404,'Missing parameters', req, res);
+            return ErrorService.sendError(412,'Missing parameters',req,res);
         }
     },
 
@@ -103,7 +105,7 @@ module.exports = {
                                 }).exec(callback);
                             },
                             /** EVERYTHING HAS BEEN DONE **/
-                            function (err) {
+                                function (err) {
                                 if (err) {
                                     return ErrorService.sendError(500, err, req, res);
                                 }
@@ -166,8 +168,9 @@ module.exports = {
             });
         }
         else{
-            return ErrorService.sendError(404,'Missing parameters', req, res);
+            return ErrorService.sendError(412,'Missing parameters', req, res);
         }
-    }
+    },
+
 };
 

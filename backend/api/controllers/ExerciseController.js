@@ -43,7 +43,8 @@ module.exports = {
                             return ErrorService.sendError(500, 'Course object not found', req, res);
                         }
                         /** LOOP Through each student subscribed to the Course according to the Exercise **/
-                        async.map(
+                        var results = [];
+                        async.each(
                             course.students,
                             function addUser(user,callback){
                                 /** CREATE A NOTIFICATION FOR EACH USER **/
@@ -57,10 +58,10 @@ module.exports = {
                                     viewed: false
                                 }).exec(function(err,notif){
                                     if(err){
-                                        callback(err,null);
+                                        callback(err);
                                     }
                                     else if(!notif){
-                                        callback(err,null);
+                                        callback(err);
                                     }
                                     else {
                                         notif.from = {
@@ -69,16 +70,17 @@ module.exports = {
                                             avatar: req.token.avatar
                                         };
                                         userService.sendNotificationToUser(notif, 'newExercise');
-                                        callback(null, user.id);
+                                        results.push(user.id);
+                                        callback();
                                     }
                                 });
                             },
                             /** Everything has been done **/
-                                function(err,results){
+                                function(err){
                                 if(err){
                                     return ErrorService.sendError(500,err,req,res);
                                 }
-                                exercise.notCheckedBy = results.toJSON();
+                                exercise.notCheckedBy = results;
                                 exercise.save(function(err){
                                     if(err){
                                         return ErrorService.sendError(500, err, req, res);
@@ -99,8 +101,7 @@ module.exports = {
         }
     },
 
-
-
+    /** WHENEVER A STUDENT HAS VIEWED THIS EXERCISE **/
     viewed: function(req,res){
         if(req.param("id") && req.param("user")){
             var id = sanitizer.escape(req.param("id"));

@@ -1,12 +1,12 @@
 /**
- * EventController.js 
+ * EventController.js
  *
  * @description ::
  * @docs        :: http://sailsjs.org/#!documentation/controllers
  */
 var sanitizer = require('sanitizer');
 var async = require('async');
-
+var _ = require('lodash');
 module.exports = {
 
     /**
@@ -71,8 +71,8 @@ module.exports = {
                                     callback(err);
                                 }
                                 else{
-                                    callback();
                                     events.push(teamEvents[0]);
+                                    callback();
                                 }
                             });
                     },
@@ -86,7 +86,7 @@ module.exports = {
             });
         }
         else {
-            ErrorService.sendError(412, 'Missing paramaters', req, res);
+            ErrorService.sendError(412, 'Missing parameters', req, res);
         }
     },
 
@@ -120,7 +120,7 @@ module.exports = {
                                     callback(err);
                                 }
                                 else if(!teamEvents){
-                                    callback(err);
+                                    callback(null);
                                 }
                                 else{
                                     events = events.concat(teamEvents);
@@ -141,6 +141,7 @@ module.exports = {
             return ErrorService.sendError(412, 'Missing parameters', req, res);
         }
     },
+
 
     /** Get all Events running on the current Date (To do Absences) **/
     getEventsOfTheDay: function (req, res) {
@@ -177,7 +178,7 @@ module.exports = {
                             if (err) {
                                 return ErrorService.sendError(500, err, req, res);
                             }
-                            res.json(absences);
+                            return res.json(absences);
                         }
                     );
                 }
