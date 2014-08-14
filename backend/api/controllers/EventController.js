@@ -41,10 +41,8 @@ module.exports = {
         })
     },
 
-    // TODO: USE ASYNC.JS
     nextEvents: function(req,res){
         if (req.param("id")) {
-            var events = [];
             User.findOne({
                 id: parseInt(req.param("id"))
             }).populate('teams').exec(function(err,user){
@@ -54,28 +52,37 @@ module.exports = {
                 if(!user){
                     return ErrorService.sendError(500,'User object not found', req, res);
                 }
-                function loadEvents(i, callback) {
-                    if(user.teams && i < user.teams.length) {
-                        Event.find({
-                            team: user.teams[i].id,
-                            start: {'>': new Date()}
-                        }).sort('start ASC').limit(1).exec(function(err, teamEvents) {
-                            if(err) {
-                                ErrorService.sendError(404, err, req, res);
-                            }
-                            else {
-                                events = events.concat(teamEvents);
-                                loadEvents(i+1, callback);
-                            }
-                        });
+                var events = [];
+                async.each(
+                    user.teams,
+                    function getEventFromTeam(team,callback){
+                        Event
+                            .find({
+                                team: team.id,
+                                start: {'>': new Date() }
+                            })
+                            .sort('start ASC')
+                            .limit(1)
+                            .exec(function(err,teamEvents){
+                                if(err){
+                                    callback(err);
+                                }
+                                else if(!teamEvents[0]){
+                                    callback(err);
+                                }
+                                else{
+                                    callback();
+                                    events.push(teamEvents[0]);
+                                }
+                            });
+                    },
+                    function(err){
+                        if(err){
+                            return ErrorService.sendError(500,err,req,res);
+                        }
+                        return res.json({event: events});
                     }
-                    else {
-                        callback();
-                    }
-                }
-                loadEvents(0, function() {
-                    return res.json({event: events});
-                });
+                );
             });
         }
         else {
@@ -90,115 +97,92 @@ module.exports = {
      * @param res
      * @returns {*}
      */
-    // TODO: USE ASYNC.JS
     getEvent: function(req,res){
         if (req.param("id")) {
             var events = [];
             User.findOne({
                 id: sanitizer.escape(req.param("id"))
             }).populate('teams').exec(function(err,user){
-                if(err)
-                    ErrorService.sendError(404, err, req, res);
-                else{
-                    if(user) {
-                        function loadEvents(i, callback) {
-                            if(user.teams && i < user.teams.length) {
-                                Event.find({
-                                    team: user.teams[i].id
-                                }).exec(function(err, teamEvents) {
-                                    if(err) {
-                                        return ErrorService.sendError(404, err, req, res);
-                                    }
-                                    else {
-                                        events = events.concat(teamEvents);
-                                        loadEvents(i+1, callback);
-                                    }
-                                });
-                            }
-                            else {
-                                callback();
-                            }
-                        }
-                        loadEvents(0, function() {
-                            return res.json(events);
-                        })
-                    }
-                    else {
-                        return ErrorService.sendError(500, 'Corrupted user', req, res);
-                    }
+                if(err) {
+                    return ErrorService.sendError(404, err, req, res);
                 }
+                if(!user){
+                    return ErrorService.sendError(500,'User object not found',req,res);
+                }
+                var events = [];
+                async.each(
+                    user.teams,
+                    function getEventFromTeam(team,callback){
+                        Event
+                            .find({ team: team.id })
+                            .exec(function(err,teamEvents){
+                                if(err){
+                                    callback(err);
+                                }
+                                else if(!teamEvents){
+                                    callback(err);
+                                }
+                                else{
+                                    events = events.concat(teamEvents);
+                                    callback();
+                                }
+                            });
+                    },
+                    function(err){
+                        if(err){
+                            return ErrorService.sendError(500,err,req,res);
+                        }
+                        return res.json(events);
+                    }
+                );
             });
         }
         else {
-            return ErrorService.sendError(412, 'Missing paramaters', req, res);
+            return ErrorService.sendError(412, 'Missing parameters', req, res);
         }
     },
 
-    getEventsOnDay: function(req,res){
-        if(req.param("date")){
-            Date.prototype.yyyymmdd = function() {
-                var yyyy = this.getFullYear().toString();
-                var mm = (this.getMonth()+1).toString(); // getMonth() is zero-based
-                var dd  = this.getDate().toString();
-                return yyyy + '-'+ (mm[1]?mm:"0"+mm[0]) + '-'+ (dd[1]?dd:"0"+dd[0]); // padding
-            };
-            Event
-            .find()
-            .populate('team')
-            .exec(function(err,events){
-                    if(err){
-                        return console.log(err);
-                    }
-                    var results = [];
+    /** Get all Events running on the current Date (To do Absences) **/
+    getEventsOfTheDay: function (req, res) {
+        if (req.token.id) {
+            Event.find({
+                teacher: sanitizer.escape(req.token.id)
+            }).populate('team').exec(function (err, events) {
+                if (err) {
+                    return ErrorService.sendError(404, err, req, res);
+                }
+                else {
+                    var currentDate = new Date();
+                    var absences = [];
                     async.each(
                         events,
-                        function(event,callback){
-                            var date = event.start.yyyymmdd();
-                            if(date === req.param("date")){
-                                results.push(event);
+                        function (event, callback) {
+                            var date = new Date(event.start);
+                            if(!event){
+                                callback(err);
                             }
-                            callback();
+                            // if event date == current date, we save the absences to display the running events on the current day
+                            else if ((currentDate.getMonth() + 1) == (date.getMonth() + 1) &&
+                                (currentDate.getFullYear()) == (date.getFullYear()) &&
+                                (currentDate.getDate()) == (date.getDate())) {
+                                absences.push(event);
+                                callback();
+                            }
+                            else {
+                                callback(null);
+                            }
                         },
-                        function(err){
-                            if(err){
-                                return console.log(err);
+                        /** EVERYTHING HAS BEEN DONE **/
+                            function (err) {
+                            if (err) {
+                                return ErrorService.sendError(500, err, req, res);
                             }
-                            res.json(results);
-                    });
+                            res.json(absences);
+                        }
+                    );
+                }
             });
         }
-    },
-
-
-    /** Function to update personal events for students and teachers **/
-    updatePersonalEvent: function(req,res){
-        if(req.param("id") && req.param("title") && req.param("start") && req.param("end")){
-            Event.findOne({
-                id: sanitizer.escape(req.param("id"))
-            }).exec(function(err,result){
-                if(err){
-                    return console.log(err);
-                }
-                /** Check whether if the user is the owner of the Event or not **/
-                else if(result && req.token.id === result.owner){
-                    Event.update({
-                            id: sanitizer.escape(req.param("id"))
-                        },
-                        {
-                            title: sanitizer.escape(req.param("title")),
-                            start: sanitizer.escape(req.param("start")),
-                            end: sanitizer.escape(req.param("end"))
-                        }
-                    ).exec(function(err,event){
-                            if(err){
-                                return console.log(err);
-                            }
-                            else if (event) {
-                                res.json(event);
-                            }
-                        });
-                }
-            })
-        }
     }
+
 };

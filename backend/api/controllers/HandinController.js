@@ -166,38 +166,131 @@ module.exports = {
                     if(!user){
                         return ErrorService.sendError(500,'User object not found', req, res);
                     }
-                    var results = [];
-                    async.each(user.courses, function (course, callback) {
-                        Exercise
-                            .find({
-                                course: course.id,
-                                allowHandins: true,
-                                end: {'>': new Date() }
-                            })
-                            .populate('handIns', {owner: req.token.id })
-                            .exec(function (err, exercises) {
-                                if (err) {
-                                    callback(err);
-                                }
-                                if(!exercises){
-                                    callback(err);
-                                }
-                                course.ex = exercises;
-                                results.push(course);
-                                callback();
-                            });
+                    async.map(
+                        user.courses,
+                        function (course, callback) {
+                            Exercise
+                                .find({
+                                    course: course.id,
+                                    allowHandins: true,
+                                    end: {'>': new Date() }
+                                })
+                                .populate('handIns', {owner: req.token.id })
+                                .exec(function (err, exercises) {
+                                    if (err) {
+                                        callback(err,null);
+                                    }
+                                    else if(!exercises){
+                                        callback(null,null);
+                                    }
+                                    else {
+                                        course.ex = exercises;
+                                        callback(null,course);
+                                    }
+                                });
                         },
-                        function (err) {
+                        function (err,results) {
                             if (err) {
                                 return ErrorService.sendError(500,err,req,res);
                             }
                             return res.json(results);
                         }
                     );
+                });
+        }
+        else {
+            return ErrorService.sendError(412, 'Missing parameters', req, res);
+        }
+    },
+
+    /** Get all HandIns according to the Exercise and fetch the attached files on each HandIn Object **/
+    getHandInsFiles: function (req, res) {
+        if (req.param("id")) {
+            Exercise.findOne({
+                id: sanitizer.escape(req.param("id"))
+            }).populate('handIns').exec(function (err, exercise) {
+                if (err) {
+                    return ErrorService.sendError(404, err, req, res);
+                }
+                else {
+                    async.map(
+                        exercise.handIns,
+                        function getFiles(handIn, callback) {
+                            HandIn.findOne({
+                                id: handIn.id
+                            }).populate('owner').populate('files').exec(function (err, handins) {
+                                if (err) {
+                                    callback(err,null);
+                                }
+                                else if(!handins){
+                                    callback(null,null);
+                                }
+                                else {
+                                    callback(null, handins);
+                                }
+                            });
+                        },
+                        function (err, results) {
+                            if(err){
+                                return ErrorService.sendError(500,err,req,res);
+                            }
+                            return res.json(results);
+                        }
+                    );
+                }
             });
         }
-        else
-            return ErrorService.sendError(412, 'Missing parameters', req, res);
+    },
+
+
+    /**
+     * Function to display all students who did not give back the handIn yet
+     * @param exercise
+     * @param course
+     * @param res
+     */
+    noHandIns: function (req, res) {
+        if (req.param("exercise") && req.param("course")) {
+
+            var exercise = sanitizer.escape(req.param("exercise"));
+            var course = sanitizer.escape(req.param("course"));
+
+            Course.findOne({
+                id: course
+            }).populate('students').exec(function (err, course) {
+                if (err) {
+                    return ErrorService.sendError(404, err, req, res);
+                }
+                else {
+                    HandIn.find({
+                        exercise: exercise,
+                        course: course.id
+                    }).populate('owner').exec(function (err, handins) {
+                        if (err) {
+                            return ErrorService.sendError(404, err, req, res);
+                        }
+                        if(!handins){
+                            return ErrorService.sendError(500,'HandIns objects not found',req,res);
+                        }
+                        var results = []; // all students who did not deposit the handin yet
+                        for (var i = 0; i < course.students.length; i++) {
+                            var found = false;
+                            for (var j = 0; j < handins.length; j++) {
+                                if (course.students[i].id == handins[j].owner.id) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            // No handIns deposited by the current user
+                            if (!found) {
+                                results.push(course.students[i]);
+                            }
+                        }
+                        return res.json(results);
+                    });
+                }
+            });
+        }
     }
 };
 

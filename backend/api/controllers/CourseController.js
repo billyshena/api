@@ -21,114 +21,120 @@ module.exports = {
                     return ErrorService.sendError(500,err,req,res);
                 }
                 /** If the subject doesnt exist **/
-                if(!subject){
+                else if(!subject){
                     return ErrorService.sendError(400,"Subject not found",req,res);
                 }
-                Course.create({
-                    owner: req.token.id,
-                    name: req.param("name"),
-                    content: req.param("content"),
-                    subject: subject.id,
-                    password: req.param("password")
-                }).exec(function (err, course) {
-                    if (err) {
-                        return ErrorService.sendError(500, err, req, res);
-                    }
-                    if(!course){
-                        return ErrorService.sendError(400, 'Course object not found', req, res);
-                    }
-                    /** Create a new directory for the created Course on the FileSystem **/
-                    var path = sails.config.appPath + '/files/courses/' + course.id;
-
-                    // If Path doesnt exist, we create it **/
-                    if (!fs.existsSync(path)) {
-                        fs.mkdirSync(path);
-                    }
-
-                    var results = []; // array containing all users of each team
-                    var teams = [];
-                    /** If the user has selected Teams  **/
-                    if(req.param("teams") && req.param("teams").length > 0) {
-                        teams = req.param("teams");
-                    }
-                    /** LOOP ON EACH SELECTED TEAM **/
-                    async.each(teams, function (teamId, callback) {
-                        Team.findOne({
-                            id: parseInt(teamId)
-                        }).populate('users').exec(function (err, team) {
-                            if (err) {
-                                callback(err);
-                            }
-                            if(!team){
-                                callback(err);
-                            }
-                            /** LOOP ON EACH USER INSIDE THE CURRENT TEAM **/
-                            async.each(team.users, function (user, callback2) {
-                                if (results.indexOf(user.id) == -1) {
-                                    results.push(user.id);
-                                    course.students.add(user.id);
-
-                                    /** CREATE A NOTIFICATION FOR EACH USER **/
-                                    Notification.create({
-                                        from: course.owner,
-                                        to: user.id,
-                                        content: 'course',
-                                        type: 'share',
-                                        picture: '',
-                                        link: '/course/' + course.id,
-                                        viewed: false
-                                    }).exec(function (err, notif) {
-                                        if (err) {
-                                            callback2(err);
-                                        }
-                                        if(!notif){
-                                            callback2(err);
-                                        }
-                                        notif.from = {
-                                            firstName: req.token.firstName,
-                                            lastName: req.token.lastName,
-                                            avatar: req.token.avatar,
-                                            id: req.token.id
-                                        };
-                                        notif.course = course;
-                                        userService.sendNotificationToUser(notif, 'newCourse');
-                                    });
-                                }
-                                callback2();
-                                },
-                                function (err) {
-                                    if (err) {
-                                        return ErrorService.sendError(500, err, req, res);
-                                    }
-                                }
-                            );
-                            callback();
-                        });
-                    },
-                    function (err) {
+                else {
+                    Course.create({
+                        owner: req.token.id,
+                        name: req.param("name"),
+                        content: req.param("content"),
+                        subject: subject.id,
+                        password: req.param("password")
+                    }).exec(function (err, course) {
                         if (err) {
                             return ErrorService.sendError(500, err, req, res);
                         }
-                        /** WHEN EVERYTHING HAS BEEN DONE **/
-                        course.save(function (err) {
-                            if (err) {
-                                return ErrorService.sendError(500, err, req, res);
-                            }
-                            /** RETURN THE COURSE OBJECT TO THE VIEW **/
-                            Course.findOne({
-                                id: course.id
-                            }).populate('subject').exec(function (err, result) {
+                        if (!course) {
+                            return ErrorService.sendError(400, 'Course object not found', req, res);
+                        }
+                        /** Create a new directory for the created Course on the FileSystem **/
+                        var path = sails.config.appPath + '/files/courses/' + course.id;
+
+                        // If Path doesnt exist, we create it **/
+                        if (!fs.existsSync(path)) {
+                            fs.mkdirSync(path);
+                        }
+
+                        var results = []; // array containing all users of each team
+                        var teams = [];
+                        /** If the user has selected Teams  **/
+                        if (req.param("teams") && req.param("teams").length > 0) {
+                            teams = req.param("teams");
+                        }
+                        /** LOOP ON EACH SELECTED TEAM **/
+                        async.each(teams, function (teamId, callback) {
+                                Team.findOne({
+                                    id: parseInt(teamId)
+                                }).populate('users').exec(function (err, team) {
+                                    if (err) {
+                                        callback(err);
+                                    }
+                                    else if (!team) {
+                                        callback(err);
+                                    }
+                                    else {
+                                        /** LOOP ON EACH USER INSIDE THE CURRENT TEAM **/
+                                        async.each(team.users, function (user, callback2) {
+                                                if (results.indexOf(user.id) == -1) {
+                                                    results.push(user.id);
+                                                    course.students.add(user.id);
+
+                                                    /** CREATE A NOTIFICATION FOR EACH USER **/
+                                                    Notification.create({
+                                                        from: course.owner,
+                                                        to: user.id,
+                                                        content: 'course',
+                                                        type: 'share',
+                                                        picture: '',
+                                                        link: '/course/' + course.id,
+                                                        viewed: false
+                                                    }).exec(function (err, notif) {
+                                                        if (err) {
+                                                            callback2(err);
+                                                        }
+                                                        else if (!notif) {
+                                                            callback2(err);
+                                                        }
+                                                        else {
+                                                            notif.from = {
+                                                                firstName: req.token.firstName,
+                                                                lastName: req.token.lastName,
+                                                                avatar: req.token.avatar,
+                                                                id: req.token.id
+                                                            };
+                                                            notif.course = course;
+                                                            userService.sendNotificationToUser(notif, 'newCourse');
+                                                        }
+                                                    });
+                                                }
+                                                callback2();
+                                            },
+                                            function (err) {
+                                                if (err) {
+                                                    return ErrorService.sendError(500, err, req, res);
+                                                }
+                                            }
+                                        );
+                                    }
+                                    callback();
+                                });
+                            },
+                            function (err) {
                                 if (err) {
                                     return ErrorService.sendError(500, err, req, res);
                                 }
-                                if(!result){
-                                    return ErrorService.sendError(400,'Course object not found',req,res);
-                                }
-                                return res.json(result);
+                                /** WHEN EVERYTHING HAS BEEN DONE **/
+                                course.save(function (err) {
+                                    if (err) {
+                                        return ErrorService.sendError(500, err, req, res);
+                                    }
+                                    /** RETURN THE COURSE OBJECT TO THE VIEW **/
+                                    Course.findOne({
+                                        id: course.id
+                                    }).populate('subject').exec(function (err, result) {
+                                        if (err) {
+                                            return ErrorService.sendError(500, err, req, res);
+                                        }
+                                        if (!result) {
+                                            return ErrorService.sendError(400, 'Course object not found', req, res);
+                                        }
+                                        return res.json(result);
+                                    });
+                                });
                             });
-                        });
                     });
-                });
+                }
             });
         }
     },
@@ -157,18 +163,26 @@ module.exports = {
                                 if(err){
                                     callback(err,null);
                                 }
-                                callback(null,result);
+                                else if(!result){
+                                    callback(null,null);
+                                }
+                                else {
+                                    callback(null, result);
+                                }
                             });
                     },
                     /** When everything has been done **/
-                    function(err,results){
+                        function(err,results){
                         if(err){
                             return ErrorService.sendError(500,err, req, res);
                         }
-                        res.json(results);
+                        return res.json(results);
                     }
                 );
             });
+        }
+        else{
+            return ErrorService.sendError(412,'Missing parameters',req,res);
         }
     },
 
@@ -181,62 +195,66 @@ module.exports = {
                 .findOne({ id: req.token.id })
                 .populate('courses',{id: course})
                 .exec(function(err,user){
-                   if(err){
-                       return ErrorService.sendError(500,err, req , res);
-                   }
-                   if(!user){
-                       return ErrorService.sendError(500,'User object not found', req , res);
-                   }
-                   /** User is not subscribed to this course yet, we can add it in the association **/
-                   if(user.courses && user.courses.length === 0){
-                       Course
-                           .findOne({ id: course })
-                           .populate('subject')
-                           .populate('students')
-                           .exec(function(err,course){
-                               if(err){
-                                   return ErrorService.sendError(500,err,req , res);
-                               }
-                               if(!course){
-                                   return ErrorService.sendError(500,'Course object not found',req , res);
-                               }
-                               if(course.password){
-                                   // Compare password from the form params to the encrypted password of the course found.
-                                   bcrypt.compare(req.param('password'), course.password, function(err, valid) {
-                                       if (err) {
-                                           return ErrorService.sendError(400, err, req, res);
-                                       }
-                                       // If the password from the form doesn't match the password from the database...
-                                       if (!valid) {
-                                           return ErrorService.sendError(600, err, req, res);
-                                       }
-                                       course.students.add(user.id);
-                                       course.save(function(err){
-                                           if(err){
-                                               return ErrorService.sendError(500,err,req,res);
-                                           }
-                                           return res.json(course);
-                                       });
-                                   });
-                               }
-                               else {
-                                   course.students.add(user.id);
-                                   course.save(function (err) {
-                                       if (err) {
-                                           return ErrorService.sendError(500,err,req,res);
-                                       }
-                                       return res.json(course);
-                                   });
-                               }
-                       });
-                   }
-                   else{
-                       /** If the user is already subscribed to the course, we send back a JSON error message **/
-                       return ErrorService.sendError(500, err, req, res);
-                   }
-            });
+                    if(err){
+                        return ErrorService.sendError(500,err, req , res);
+                    }
+                    if(!user){
+                        return ErrorService.sendError(500,'User object not found', req , res);
+                    }
+                    /** User is not subscribed to this course yet, we can add it in the association **/
+                    if(user.courses && user.courses.length === 0){
+                        Course
+                            .findOne({ id: course })
+                            .populate('subject')
+                            .populate('students')
+                            .exec(function(err,course){
+                                if(err){
+                                    return ErrorService.sendError(500,err,req , res);
+                                }
+                                if(!course){
+                                    return ErrorService.sendError(500,'Course object not found',req , res);
+                                }
+                                if(course.password){
+                                    // Compare password from the form params to the encrypted password of the course found.
+                                    bcrypt.compare(req.param('password'), course.password, function(err, valid) {
+                                        if (err) {
+                                            return ErrorService.sendError(400, err, req, res);
+                                        }
+                                        // If the password from the form doesn't match the password from the database...
+                                        if (!valid) {
+                                            return ErrorService.sendError(600, err, req, res);
+                                        }
+                                        course.students.add(user.id);
+                                        course.save(function(err){
+                                            if(err){
+                                                return ErrorService.sendError(500,err,req,res);
+                                            }
+                                            return res.json(course);
+                                        });
+                                    });
+                                }
+                                else {
+                                    course.students.add(user.id);
+                                    course.save(function (err) {
+                                        if (err) {
+                                            return ErrorService.sendError(500,err,req,res);
+                                        }
+                                        return res.json(course);
+                                    });
+                                }
+                            });
+                    }
+                    else{
+                        /** If the user is already subscribed to the course, we send back a JSON error message **/
+                        return ErrorService.sendError(500, err, req, res);
+                    }
+                });
+        }
+        else{
+            return ErrorService.sendError(412,'Missing parameters', req, res);
         }
     },
+
 
     /** Remove the Course + its contents, exercises and corrections **/
     destroy: function(req,res){

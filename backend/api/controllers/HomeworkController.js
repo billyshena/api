@@ -108,27 +108,31 @@ module.exports = {
                 if(err){
                     return ErrorService.sendError(404, err, req, res);
                 }
-                else{
-                    if(hw) {
-                        Comment.find({
-                            homework: hw.id
-                        }).populate('owner').exec(function(err,comments){
-                            if (err)
-                                return ErrorService.sendError(404, err, req, res);
-                            res.json({
-                                homework: hw,
-                                comments: comments
-                            });
-                        });
-                    }
-                    else {
-                        return ErrorService.sendError(500, err, req, res);
-                    }
+                if(!hw){
+                    return ErrorService.sendError(500, 'Homework object not found', req, res);
                 }
+                /** Fetch all Comment object according to the Homework Object **/
+                Comment
+                    .find({ homework: hw.id })
+                    .populate('owner')
+                    .exec(function(err,comments){
+                        if (err) {
+                            return ErrorService.sendError(404, err, req, res);
+                        }
+                        if(!comments){
+                            return ErrorService.sendError(500,'Comments object not found',req ,res);
+                        }
+                        return res.json({
+                            homework: hw,
+                            comments: comments
+                        });
+                    });
+
             });
         }
-        else
+        else {
             return ErrorService.sendError(412, 'Missing parameters', req, res);
+        }
     },
 
 
@@ -147,22 +151,28 @@ module.exports = {
             Homework.findOne({
                 id: sanitizer.escape(req.param("id"))
             }).populate('owner').exec(function(err,homework){
-               if(err){
-                   ErrorService.sendError(404, err, req, res);
-               }
-               // check if the user updating the homework is the one who posted it
-               else if(homework.owner.id == sanitizer.escape(req.token.id)){
-                   homework.name = sanitizer.escape(req.param("name"));
-                   homework.content = req.param("content");
-                   homework.tags = req.param("tags");
-                   homework.save(function(err) {
-                       if (err) {
-                           return ErrorService.sendError(500, err, req, res);
-                       }
-                       res.json(homework);
-                   });
-               }
+                if(err){
+                    ErrorService.sendError(404, err, req, res);
+                }
+                // check if the user updating the homework is the one who posted it
+                else if(homework.owner.id === req.token.id){
+                    homework.name = sanitizer.escape(req.param("name"));
+                    homework.content = req.param("content");
+                    homework.tags = req.param("tags");
+                    homework.save(function(err) {
+                        if (err) {
+                            return ErrorService.sendError(500, err, req, res);
+                        }
+                        return res.json(homework);
+                    });
+                }
+                else{
+                    return ErrorService.sendError(500, 'You are not allowed to update Homework', req, res);
+                }
             });
+        }
+        else{
+            return ErrorService.sendError(412, 'Missing parameters', req, res);
         }
     }
 

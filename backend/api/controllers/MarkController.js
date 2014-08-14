@@ -31,9 +31,7 @@ module.exports = {
      * @param res
      */
     create: function (req, res) {
-
         if (req.param('student') && req.param('exam') && req.param('mark')) {
-
             // First we check if a mark already exists
             Mark.findOne({
                 student: req.param('student'),
@@ -44,15 +42,12 @@ module.exports = {
                 }
                 // If exists, we update it
                 if (mark) {
-                    console.log(mark);
                     mark.value = sanitizer.escape(req.param('mark'));
                     mark.save(function (err) {
                         if (err)
                             return ErrorService.sendError(404, err, req, res);
-                        console.log(err);
-                        console.log("mark updated" + mark);
+                        return res.json(mark.value);
                     });
-                    res.json(req.param('mark'));
                 }
                 else {
                     Mark.create({
@@ -63,10 +58,10 @@ module.exports = {
                         if (err) {
                             return ErrorService.sendError(404, err, req, res);
                         }
-                        else {
-                            console.log('mark created ', mark);
-                            res.json(req.param('mark'));
+                        if(!mark){
+                            return ErrorService.sendError(500, 'Mark object not found', req ,res);
                         }
+                        return res.json(req.param('mark'));
                     });
                 }
             });
@@ -75,5 +70,4 @@ module.exports = {
             return ErrorService.sendError(412, 'Missing parameters', req, res);
         }
     }
-
 };

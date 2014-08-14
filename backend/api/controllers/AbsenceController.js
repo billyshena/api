@@ -36,23 +36,27 @@ module.exports = {
                                 if (err) {
                                     callback(err,null);
                                 }
-                                if(!abs){
+                                else if(!abs){
                                     callback(null,null);
                                 }
-                                /** Fetch according Event to the Absence object found **/
-                                Event
-                                    .findOne({ id: abs.event })
-                                    .populate('teacher')
-                                    .exec(function (err, event) {
-                                        if (err) {
-                                            callback(err,null);
-                                        }
-                                        if(!event){
-                                            callback(null,null);
-                                        }
-                                        abs.event = event;
-                                        callback(null, abs);
-                                });
+                                else {
+                                    /** Fetch according Event to the Absence object found **/
+                                    Event
+                                        .findOne({ id: abs.event })
+                                        .populate('teacher')
+                                        .exec(function (err, event) {
+                                            if (err) {
+                                                callback(err, null);
+                                            }
+                                            else if (!event) {
+                                                callback(null, null);
+                                            }
+                                            else {
+                                                abs.event = event;
+                                                callback(null, abs);
+                                            }
+                                        });
+                                }
                             });
                         },
                         /** When everything has been done **/
@@ -64,6 +68,9 @@ module.exports = {
                         }
                     );
             });
+        }
+        else{
+            return ErrorService.sendError(404,'Missing parameters', req, res);
         }
     },
 
@@ -93,12 +100,7 @@ module.exports = {
                                     event: eventId,
                                     owner: user,
                                     state: 'pending'
-                                }).exec(function (err, abs) {
-                                    if (err) {
-                                        callback(err);
-                                    }
-                                    callback();
-                                });
+                                }).exec(callback);
                             },
                             /** EVERYTHING HAS BEEN DONE **/
                             function (err) {
@@ -162,6 +164,9 @@ module.exports = {
                     }
                 }
             });
+        }
+        else{
+            return ErrorService.sendError(404,'Missing parameters', req, res);
         }
     }
 };
